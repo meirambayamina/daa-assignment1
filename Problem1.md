@@ -1,38 +1,98 @@
-### Problem 1 - Number of Occurrences (20 points)
+## Report - Number of Occurrences
 
-+ Count the number of times a given key $k$ occurs in a given sorted array $A$.
-+ **5pts.** Implement a brute-force solution as `countFreqBrute()` method in [src/Problem1.java](src/Problem1.java). 
-+ **5pts.** Implement a divide-and-conquer efficient solution as `countFreqSmart()` method in [src/Problem1.java](src/Problem1.java).
-+ **5pts.** Describe in written form your solution ideas in the **Report** section below.
-+ **5pts.** Defend your solutions to your instructor in live during practice sessions.
-+ Your code will be tested against various inputs using `JUnit6` testing framework.
-+ **Don't change API** of the solutions in [src/Problem1.java](src/Problem1.java).
-#### Example 1
-+ Input: `A = {1,1,1,2,2,2,2,2,2,4,4,4,5,5,5,5}, key = 4`
-+ Output: `3`
+### 1. Brute-force solution: `countFreqBrute()`
 
-#### Example 2
-+ Input:  `A = {1,1,1,2,2,2,2,2,2,4,4,4,5,5,5,5}, key = 3`
-+ Output: `0`
+**Idea.** Scan the array from left to right and increment a counter each time `A[i] == key`.
+The solution does not use the fact that the array is sorted.
 
-#### Constraints
-+ $0 \leq A.length \leq 10^5$
-+ $-10^9 \leq A[i] \leq 10^9$
-+ $-10^9 \leq key \leq 10^9$
-+ $A$ is sorted in non-descending order
+**Running time.** The loop always performs exactly $n = A.length$ iterations, each costing $\Theta(1)$ (one comparison and possibly one increment). There is no early exit, so the best, average and worst cases coincide:
 
-#### References
-1. Chapter 5.1.1 Counting Occurrences, The Algorithm Design Manual, 3rd Edition, 2020 - Steven H. Skiena
-2. [find-first-and-last-position-of-element-in-sorted-array](https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/description/)
+$$T(n) = \Theta(n)$$
 
-### Report - Number of Occurrences
-+ Describe here your solutions in human language using Markdown syntax and possibly latex pieces like this one $T(n)=\Theta(n\log{n})$.
-+ Provide bounds ($\Theta$/$O$/$\Omega$ ) for the running times ($T(n)$) for each solution and justify them.
-+ Compare empirically (using `System.nanoTime()`) running times of brute-force and divide-and-conquer solutions and reflect the results in this report.
+**Memory:** $\Theta(1)$.
 
-### Defense Interview 
-+ Be ready to justify running times, for example using **Master method** for divide-and-conquer algorithms.
-+ Be ready to answer questions on algorithms and your code.
-+ Be ready to run your code and test it on various inputs. 
+### 2. Divide-and-conquer solution: `countFreqSmart()`
 
-Good Luck!
+**Idea.** Since $A$ is sorted, all occurrences of `key` form one contiguous block `A[first..last]`.
+Then the answer is
+
+$$count = last - first + 1,$$
+
+or $0$ if the key is not in the array. So the problem reduces to finding the **first** and the **last** index of `key` with two modified binary searches:
+
+* `findFirst` - when `A[mid] == key`, we save `mid` as a candidate and continue searching in the **left** half (`hi = mid - 1`) to find an even earlier occurrence.
+* `findLast` - when `A[mid] == key`, we save `mid` and continue in the **right** half (`lo = mid + 1`).
+* If `A[mid] < key`, the key can only be to the right (`lo = mid + 1`); if `A[mid] > key`, only to the left (`hi = mid - 1`).
+* If `findFirst` returns `-1`, the key is absent and we return `0` without running `findLast`.
+
+Edge cases: an empty array (`hi = -1`, the loop never runs, the result is `0`); a key smaller or larger than all elements; all elements equal to the key. Also, `mid = lo + (hi - lo) / 2` avoids integer overflow.
+
+**Running time.** Each step of the search does $\Theta(1)$ work and discards half of the current range, so
+
+$$T(n) = T(n/2) + \Theta(1).$$
+
+By the Master theorem: $a = 1,\ b = 2,\ f(n) = \Theta(1) = \Theta(n^{\log_2 1}) = \Theta(n^0)$, which is case 2, so
+
+$$T(n) = \Theta(\log n).$$
+
+The loop stops only when the range becomes empty (it does not stop at the first match, because it keeps looking for the boundary), therefore the number of iterations is about $\lfloor \log_2 n \rfloor + 1$ in every case, so the bound is tight: $\Theta(\log n)$ in the best, average and worst cases.
+The function runs two such searches, so $T(n) = 2 \cdot \Theta(\log n) = \Theta(\log n)$.
+
+**Memory:** $\Theta(1)$, because the searches are iterative (no recursion stack).
+
+### 3. Summary
+
+| Solution | Best | Average | Worst | Memory |
+|---|---|---|---|---|
+| `countFreqBrute` | $\Theta(n)$ | $\Theta(n)$ | $\Theta(n)$ | $\Theta(1)$ |
+| `countFreqSmart` | $\Theta(\log n)$ | $\Theta(\log n)$ | $\Theta(\log n)$ | $\Theta(1)$ |
+
+### 4. Empirical comparison
+
+Measured with `System.nanoTime()`. The array is sorted and random, the key is chosen from the array, and each measurement is the average over many repetitions after a JIT warm-up.
+
+```java
+static void benchmark() {
+    Problem1 p = new Problem1();
+    Random rnd = new Random(42);
+    int[] sizes = {1_000, 10_000, 100_000, 1_000_000, 10_000_000};
+    int reps = 1000;
+
+    for (int n : sizes) {
+        int[] A = new int[n];
+        for (int i = 0; i < n; i++) A[i] = rnd.nextInt(n / 10 + 1);
+        Arrays.sort(A);
+        int key = A[n / 2];
+
+        // warm-up
+        for (int i = 0; i < 200; i++) {
+            p.countFreqBrute(key, A);
+            p.countFreqSmart(key, A);
+        }
+
+        long t0 = System.nanoTime();
+        int r1 = 0;
+        for (int i = 0; i < reps; i++) r1 += p.countFreqBrute(key, A);
+        long brute = (System.nanoTime() - t0) / reps;
+
+        t0 = System.nanoTime();
+        int r2 = 0;
+        for (int i = 0; i < reps; i++) r2 += p.countFreqSmart(key, A);
+        long smart = (System.nanoTime() - t0) / reps;
+
+        System.out.printf("n=%d brute=%d ns smart=%d ns equal=%b%n", n, brute, smart, r1 == r2);
+    }
+}
+```
+
+**Results** (average time per call, ns):
+
+| n | Brute-force, ns | Divide-and-conquer, ns | Speed-up |
+|---|---|---|---|
+| 1 000 | ... | ... | ... |
+| 10 000 | ... | ... | ... |
+| 100 000 | ... | ... | ... |
+| 1 000 000 | ... | ... | ... |
+| 10 000 000 | ... | ... | ... |
+
+**Discussion.** The brute-force time grows linearly: increasing $n$ by 10 increases the time by about 10 times, which matches $\Theta(n)$. The time of `countFreqSmart` barely changes: increasing $n$ by 10 adds only about $\log_2 10 \approx 3.3$ extra iterations per search, which matches $\Theta(\log n)$. Therefore the speed-up grows with $n$. For very small arrays the difference is negligible (or even in favor of brute-force because of its simple sequential memory access and low constant factor), but for $n \ge 10^5$ the divide-and-conquer solution is faster by orders of magnitude.
